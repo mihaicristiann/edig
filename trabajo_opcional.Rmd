@@ -5,26 +5,139 @@ date: "2025-11-10"
 output: html_document
 ---
 
-```{r setup, include=FALSE}
+```{r eliminar_al_terminar_proy}
+capture.output(
+  install.packages(
+    c("knitr", "tidyverse", "lubridate", "plm", "forecast", "tseries", "dplyr", "readxl", "tidyr"),
+    quiet = TRUE,
+    ask = FALSE
+  ),
+  file = NULL
+)
+```
+
+Librerías que hemos utilizado
+
+```{r librerias, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(lubridate)
+library(plm)       # L1, L2 [file:21]
+library(forecast)  # L4, L5 [file:21]
+library(tseries)   # opcional, tests TS
+library(readxl)
+library(dplyr)
+library(tidyr)
 ```
 
-## R Markdown
+Datos, de donde los hemos sacado y que bases son.
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+```{r carga_perno}
+perno_raw <- read_excel(
+  "pernoctaciones.xlsx",
+  skip  = 8 ,        # salta filas de título; ajusta según veas
+  n_max = 70
+)
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+names(perno_raw)[1] <- "ccaa"
 
-```{r cars}
-summary(cars)
+perno <- perno_raw %>%
+  mutate(across(-ccaa, as.character)) %>%          # columnas de meses a char
+  pivot_longer(
+    cols = -ccaa,
+    names_to  = "periodo",                         # ej. "2025M10"
+    values_to = "pernoctaciones"
+  ) %>%
+  mutate(pernoctaciones = as.numeric(pernoctaciones)) %>%
+  separate(periodo, into = c("anio", "mes"), sep = "M") %>%
+  mutate(
+    anio = as.integer(anio),
+    mes  = as.integer(mes)
+  ) %>%
+  select(ccaa, anio, mes, pernoctaciones)
 ```
 
-## Including Plots
+```{r carga_adr}
+adr_raw <- read_excel(
+  "ADR.xlsx",
+  skip  = 7 ,        # salta filas de título; ajusta según veas
+  n_max = 71
+)
 
-You can also embed plots, for example:
+names(adr_raw)[1] <- "ccaa"
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+adr <- adr_raw %>%
+  mutate(across(-ccaa, as.character)) %>%          # columnas de meses a char
+  pivot_longer(
+    cols = -ccaa,
+    names_to  = "periodo",                         # ej. "2025M10"
+    values_to = "adr"
+  ) %>%
+  mutate(adr = as.numeric(adr)) %>%
+  separate(periodo, into = c("anio", "mes"), sep = "M") %>%
+  mutate(
+    anio = as.integer(anio),
+    mes  = as.integer(mes)
+  ) %>%
+  select(ccaa, anio, mes, adr)
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+```{r carga_plazas}
+plazas_raw <- read_excel(
+  "plazas.xlsx",
+  skip  = 7 ,        # salta filas de título; ajusta según veas
+  n_max = 114
+)
+
+# 1) Renombrar la primera columna
+names(plazas_raw)[1] <- "etiqueta"
+
+plazas_limpio <- plazas_raw %>%
+  # columna que solo tiene la CCAA en las filas tipo "01 Andalucía", "02 Aragón", etc.
+  mutate(
+    ccaa = ifelse(grepl("^0[0-9]", etiqueta), etiqueta, NA_character_)
+  ) %>%
+  # rellenar la CCAA hacia abajo para que todas las filas (Hoteles, Campings, …) la tengan
+  fill(ccaa, .direction = "down") %>%
+  # eliminar las filas que son solo el nombre de la CCAA (sin etiqueta de tipo)
+  filter(!grepl("^0[0-9]", etiqueta))
+
+# Ahora cada CCAA tiene varias filas: Hoteles, Campings, ...
+
+# 2) Pasar de ancho (meses) a largo
+plazas_long <- plazas_limpio %>%
+  mutate(across(-c(ccaa, etiqueta), as.character)) %>%
+  pivot_longer(
+    cols = -c(ccaa, etiqueta),
+    names_to  = "periodo",      # "2025M10", ...
+    values_to = "plazas"
+  ) %>%
+  mutate(
+    plazas = as.numeric(plazas)
+  ) %>%
+  separate(periodo, into = c("anio", "mes"), sep = "M") %>%
+  mutate(
+    anio = as.integer(anio),
+    mes  = as.integer(mes)
+  ) %>%
+  select(ccaa, etiqueta, anio, mes, plazas)
+```
+
+```{r carga_ipi}
+ipi <- read_excel(
+  "IPI.xlsx",
+  skip  = 8 ,        # salta filas de título; ajusta según veas
+  n_max = 18
+)
+
+names(ipi)[1] <- "ccaa"
+```
+
+```{r}
+ipc <- read_excel(
+  "ipc.xlsx",
+  skip  = 7 ,        # salta filas de título; ajusta según veas
+  n_max = 287
+)
+```
