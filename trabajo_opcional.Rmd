@@ -5,17 +5,6 @@ date: "2025-11-10"
 output: html_document
 ---
 
-```{r eliminar_al_terminar_proy}
-capture.output(
-  install.packages(
-    c("knitr", "tidyverse", "lubridate", "plm", "forecast", "tseries", "dplyr", "readxl", "tidyr"),
-    quiet = TRUE,
-    ask = FALSE
-  ),
-  file = NULL
-)
-```
-
 Librerías que hemos utilizado
 
 ```{r librerias, include=FALSE}
@@ -141,3 +130,4 @@ ipc <- read_excel(
   n_max = 287
 )
 ```
+
