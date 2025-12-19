@@ -1,11 +1,30 @@
 ---
-title: "Trabajo Opcional Edig"
+title: "Trabajo Opcional Edig (ponerle título)"
 author: "Mihai Cristian Mihalache Farcas y Rubén Tormo Piles"
 date: "2025-11-10"
 output: html_document
 ---
 
-Librerías que hemos utilizado
+# 1. Introducción
+
+El sector turístico representa uno de los pilares fundamentales de la economía española, no solo por su contribución al Producto Interior Bruto (PIB), sino también por su capacidad de generar empleo y dinamizar las economías regionales. No obstante, la demanda turística es un fenómeno complejo, influenciado por factores de precio, capacidad alojativa y el contexto macroeconómico de las distintas regiones. El presente trabajo tiene como objetivo analizar de forma empírica los determinantes de las pernoctaciones hoteleras en las Comunidades Autónomas de España, aplicando técnicas avanzadas de econometría espacial y temporal.
+
+Para alcanzar este objetivo, el estudio se estructura en dos bloques metodológicos complementarios. En primer lugar, se emplea un enfoque de datos de panel con frecuencia mensual. Este modelo permite capturar tanto la variabilidad entre regiones como la evolución temporal, controlando por la estacionalidad inherente al sector y por efectos fijos regionales que podrían sesgar los resultados. Se analizará específicamente la relación entre la demanda y variables clave como la Tarifa Media Diaria (ADR) deflactada —para medir la elasticidad-precio real— y el Índice de Producción Industrial (IPI) como indicador de la actividad económica regional.
+
+En segundo lugar, el trabajo profundiza en el análisis de series temporales centrándose en una serie específica de pernoctaciones. Mediante técnicas de descomposición y modelos de predicción utilizando el paquete forecast de R, se evaluará la capacidad de pronóstico del modelo a través de métodos de ventana deslizante (rolling window). Con ello, se busca no solo explicar el comportamiento pasado, sino también ofrecer una herramienta de previsión útil para la planificación del sector.
+
+Los datos utilizados provienen de fuentes oficiales del Instituto Nacional de Estadística (INE), garantizando la rigurosidad y transparencia del análisis. A través de este enfoque integrado, se pretende dar respuesta a la pregunta de investigación: ¿En qué medida el precio real y el dinamismo económico regional condicionan la demanda turística en el corto plazo?
+
+Notas para tu trabajo:
+Contextualización: He incluido la mención al ADR Real y al IPI, ya que el profesor pide explícitamente transformar series nominales a reales y usar fuentes oficiales.
+
+Metodología: Se mencionan explícitamente los "Efectos Fijos" y la "Ventana Deslizante", que son requisitos directos de las instrucciones.
+
+es una introducción de todo, igual no hace falta que expliquemos ya ahí lo q hacemos en el trabajo, sino dar una visión general de pq es importante y pa q se podría usar, y dar como un adelanto, lo digo pq igual cuando terminemos la podemos cambiar (obviamente)
+
+
+
+Librerías que hemos utilizado (cuando las usemos justificar pq las usamos)
 
 ```{r librerias, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -20,7 +39,35 @@ library(dplyr)
 library(tidyr)
 ```
 
-Datos, de donde los hemos sacado y que bases son.
+Datos, de donde los hemos sacado y que bases son
+
+# 2. Selección y Origen de los Datos
+
+Para este estudio, se han seleccionado cinco indicadores clave. Todos ellos han sido extraídos de las bases de datos oficiales del Instituto Nacional de Estadística (INE). La elección de estas fuentes garantiza la robustez, fiabilidad y comparabilidad de los datos a nivel regional en España.
+
+# 2.1. Justificación de las Variables
+
+La selección sigue la teoría económica de la demanda aplicada al sector turístico:
+
+  -> Pernoctaciones (Variable Dependiente): Es el indicador principal del volumen de demanda. Se ha extraído de la Encuesta de Ocupación Hotelera (EOH) para capturar el uso real de los servicios turísticos en cada CC.AA.
+
+  -> ADR - Tarifa Media Diaria (Variable de Precio): Representa el precio promedio pagado por habitación. Es fundamental para calcular la elasticidad-precio de la demanda.
+
+  -> IPC - Índice de Precios de Consumo (Deflactor): Dado que el ADR es una variable nominal, se utiliza el IPC General para transformar los precios en términos reales. Esto es esencial para eliminar el sesgo de la inflación y observar cambios puros en el poder adquisitivo.
+
+  -> IPI - Índice de Producción Industrial (Proxy de Renta): Dado que el PIB regional no se publica con frecuencia mensual, se utiliza el IPI como variable proxy de la actividad económica y la renta disponible en cada comunidad.
+
+  -> Plazas Estimadas (Control de Oferta): Se incluye para controlar la capacidad alojativa de cada región, evitando que el tamaño de la infraestructura turística se confunda con la preferencia de los consumidores.
+  
+
+# 2.2. Obtención y Proceso de Limpieza
+
+Los datos se han obtenido mediante la exportación de tablas personalizadas desde el portal del INE. El proceso de preparación y limpieza previa (data cleaning) ha sido riguroso para asegurar la compatibilidad en un modelo de Datos de Panel:
+
+aquí falta completar
+
+
+
 
 ```{r carga_perno}
 perno_raw <- read_excel(
@@ -130,4 +177,3 @@ ipc <- read_excel(
   n_max = 287
 )
 ```
-
