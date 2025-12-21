@@ -2,13 +2,18 @@
 title: "Trabajo Opcional Edig"
 author: "Mihai Cristian Mihalache Farcas y Rubén Tormo Piles"
 date: "2025-11-10"
-output: html_document
+output: 
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    theme: flatly
 ---
 
 
-Librerías que hemos utilizado
-
 ```{r librerias, include=FALSE}
+# Librerías que hemos utilizado
+
 knitr::opts_chunk$set(echo = TRUE)
 
 library(tidyverse)
@@ -20,11 +25,44 @@ library(readxl)
 library(dplyr)
 library(tidyr)
 library(ggplot2)
+library(lmtest)
+library(sandwich)
 ```
 
-Datos, de donde los hemos sacado y que bases son.
+# 1. Índice de contenidos
 
-```{r carga_perno}
+
+
+
+
+
+
+# 2. Introducción
+
+El objetivo de este trabajo es **analizar empíricamente el comportamiento del turismo en las comunidades autónomas españolas** utilizando técnicas de **datos de panel** y **series temporales**. Se emplean datos mensuales de pernoctaciones, plazas de alojamiento, precio medio por noche (ADR) e índice de producción industrial (IPI), construyendo un panel regional con frecuencia inferior al año tal como exige la asignatura.  
+
+El análisis se estructura en dos grandes bloques. En primer lugar, se desarrolla un **modelo de datos de panel** que relaciona las pernoctaciones con sus principales determinantes (capacidad, precios y ciclo económico), siguiendo los pasos clásicos del análisis económico empírico: formulación de la pregunta de interés, construcción del modelo teórico, estimación de diferentes especificaciones (pooled, efectos fijos y efectos aleatorios) y elección del modelo más adecuado mediante contrastes estadísticos.  
+
+En segundo lugar, se selecciona una de las variables del panel para realizar un **ejercicio de pronóstico de series temporales**. Para ello se trabaja con el paquete **`forecast`**, se aplican transformaciones y técnicas de descomposición, se estiman modelos ARIMA/ETS y se evalúa la capacidad predictiva mediante una **ventana deslizante**, comparando varios modelos en términos de error de predicción.  
+
+A lo largo del informe se combinan resultados numéricos y gráficos con una interpretación económica cuidadosa, de modo que las conclusiones estén respaldadas tanto por la evidencia estadística como por el contexto del sector turístico español.
+
+
+Pregunta de interés: ¿Cómo afectan el PIB per cápita y el tipo de cambio al turismo en las CCAA españolas? ¿Podemos pronosticar llegadas turísticas a nivel nacional?
+
+Modelo teórico:
+Turismo~it~ = β~0~ + β~1~PIBpc~it~ + β~2~TipoCambio~it~ + α~i~ + u~it~
+ 
+Donde i: CCAA, t: trimestres, α~i~: efectos fijos regionales.
+
+Datos: INE (turismo por CCAA trimestral, 2015-2024), 3 variables, panel balanceado (17×36).
+
+
+
+# 3. Datos, de donde los hemos sacado y que representan.
+
+## 3.1. Pernoctaciones turísticas: 
+```{r carga_perno, include=FALSE}
 perno <- read_excel(
   "pernoctaciones.xlsx",
   skip  = 8 ,        # salta filas de título; ajusta según veas
@@ -47,9 +85,19 @@ perno_long <- perno %>%
     mes  = as.integer(mes)
   ) %>%
   select(ccaa, anio, mes, pernoctaciones)
+
+```
+```{r, echo = FALSE}
+knitr::kable(head(perno_long))
 ```
 
-```{r carga_plazas}
+La variable principal de estudio son las **pernoctaciones mensuales en establecimientos turísticos por comunidad autónoma**, obtenidas a partir de las estadísticas oficiales de ocupación publicadas por el Instituto Nacional de Estadística (INE). Esta información recoge el número total de noches que los viajeros pasan alojados en hoteles y otros tipos de alojamiento reglado, lo que constituye un indicador directo del nivel de actividad turística en cada región y mes.
+
+En la base de datos, estas observaciones se almacenan en la columna `pernoctaciones`, junto con los identificadores de comunidad autónoma (`ccaa`), año (`anio`) y mes (`mes`), permitiendo construir un panel mensual para el periodo analizado.
+
+
+## 3.2. Plazas de alojamiento
+```{r carga_plazas, include=FALSE}
 plazas <- read_excel(
   "plazas.xlsx",
   skip  = 8 ,        # salta filas de título; ajusta según veas
@@ -74,8 +122,17 @@ plazas_long <- plazas %>%
   ) %>%
   select(ccaa, anio, mes, plazas)
 ```
+```{r, echo = FALSE}
+knitr::kable(head(plazas_long))
+```
 
-```{r carga_ipi}
+Como medida de la **capacidad de oferta turística**, se utilizan las **plazas disponibles en establecimientos turísticos** por comunidad autónoma y mes, también procedentes de las encuestas de ocupación del INE. Esta variable refleja el número máximo de pernoctaciones que pueden atenderse en cada destino y periodo, y permite capturar diferencias estructurales en el tamaño y grado de desarrollo del sector turístico regional.
+
+Esta información se recoge en la columna `plazas`, asociada igualmente a los identificadores temporales y regionales, lo que facilita su uso como variable explicativa en el modelo de datos de panel.
+
+
+## 3.3. Índice de Producción Industrial (IPI)
+```{r carga_ipi, include=FALSE}
 ipi <- read_excel(
   "IPI.xlsx",
   skip  = 8 ,        # salta filas de título; ajusta según veas
@@ -99,8 +156,16 @@ ipi_long <- ipi %>%
   ) %>%
   select(ccaa, anio, mes, ipi)
 ```
+```{r, echo=FALSE}
+knitr::kable(head(ipi_long))
+```
+Como indicador del **ciclo económico regional**, se incorpora el **Índice de Producción Industrial (IPI)** por comunidad autónoma, normalmente publicado con base 100 por el INE. El IPI resume la evolución de la actividad productiva, y se utiliza aquí como variable de control para capturar el efecto del entorno macroeconómico sobre la demanda turística.
 
-```{r}
+En la base, el IPI se almacena en la columna `ipi`. Al estar medido en índice, valores superiores a 100 indican un nivel de producción por encima del año base, mientras que valores inferiores reflejan fases de desaceleración.
+
+
+## 3.4. Índice de Precios de Consumo (IPC)
+```{r carga_ipc, include=FALSE}
 ipc <- read_excel(
   "ipc.xlsx",
   skip  = 8 ,        # salta filas de título; ajusta según veas
@@ -112,8 +177,15 @@ ipc$`2025M11` <- NULL
 
 ipc_2010M01 = ipc$`2010M01`
 ```
+```{r, echo=FALSE}
+knitr::kable(head(ipc[, c(1:12)]))
+```
 
-```{r carga_adr}
+El **Índice de Precios de Consumo (IPC)** se emplea exclusivamente como deflactor del ADR. El IPC se toma de las estadísticas oficiales y se mide como un índice con base 100 por comunidad y mes. 
+
+
+## 3.5. Datos de precios: ADR
+```{r carga_adr, include=FALSE}
 adr <- read_excel(
   "ADR.xlsx",
   skip  = 7 ,        # salta filas de título; ajusta según veas
@@ -150,8 +222,21 @@ adr_real_long <- adr_real %>%
   ) %>%
   select(ccaa, anio, mes, adr)
 ```
+```{r, echo=FALSE}
+knitr::kable(head(adr_real_long))
+```
 
-```{r}
+Como medida del **precio medio por noche**, se utiliza el *Average Daily Rate* (ADR) obtenido a partir de las estadísticas de ocupación hotelera. El ADR recoge la facturación media por habitación ocupada y se interpreta como el precio nominal que pagan los turistas por pernoctar en cada comunidad autónoma y mes. En la base, este valor se almacena en la columna `adr`.
+
+Dado que el ADR está expresado en términos nominales, se construye una versión **deflactada** utilizando el Índice de Precios de Consumo (IPC) regional:
+\[
+ADR\_real_{it} = \frac{ADR_{it}}{IPC_{it}/100}
+\]
+De este modo se eliminan las variaciones debidas al nivel general de precios y se obtiene una medida del coste real del alojamiento turístico a lo largo del tiempo que permite analizar la evolución del precio del alojamiento descontando el efecto de la inflación y hacer comparaciones temporales más significativas.
+
+
+## 3.6. Construcción del panel y variable temporal
+```{r creacion_df, include=FALSE}
 df <- perno_long |>
   left_join(plazas_long, by = c("ccaa", "anio", "mes")) |>
   left_join(adr_real_long,    by = c("ccaa", "anio", "mes")) |>
@@ -169,62 +254,298 @@ df_panel <- df_panel[
   complete.cases(df_panel[ , c("pernoctaciones", "adr", "plazas", "ipi")]),
 ]
 ```
+```{r, echo=FALSE}
+knitr::kable(head(df))
+```
 
+A partir de estas fuentes, se ha construido una base integrada `df` en formato de panel, donde cada fila corresponde a una combinación **comunidad autónoma–mes–año**. Además de las columnas de identificación (`ccaa`, `anio`, `mes`), se ha creado una variable temporal continua `fecha_panel` (año fraccionado) para facilitar la representación gráfica y el tratamiento como serie temporal agregada.
+
+Este diseño permite combinar en un mismo conjunto de datos las dimensiones **transversal** (diferencias entre CCAA) y **temporal** (evolución mensual), cumpliendo los requisitos del trabajo para el análisis de datos de panel y series temporales.
+
+
+
+
+
+# 4. Análisis descriptivo 
+## 4.1. Estadísticos descriptivos
+
+En este apartado, presentamos los estadísticos descriptivos básicos de las principales variables del panel (pernoctaciones, plazas, adr e ipi) con el objetivo de resumir su distribución y tener una primera idea de los niveles y la dispersión del turismo y de sus posibles determinantes.
 ```{r}
-ggplot(df, aes(x = pernoctaciones)) +
-  geom_histogram(bins = 30, color = "black", fill = "lightblue") +
-  labs(title = "Histograma de Pernoctaciones", x = "Pernoctaciones", y = "Frecuencia")
+# Estadísticos básicos
+summary(df[, c("pernoctaciones", "plazas", "adr", "ipi")])
 
-ggplot(df, aes(x = adr)) +
-  geom_histogram(bins = 30, color = "black", fill = "lightblue") +
-  labs(title = "Histograma de ADR real", x = "ADR real", y = "Frecuencia")
+# Media y desviación típica por variable
+desc_stats <- df |>
+  summarise(
+    mean_perno = mean(pernoctaciones, na.rm = TRUE),
+    sd_perno   = sd(pernoctaciones, na.rm = TRUE),
+    mean_plazas = mean(plazas, na.rm = TRUE),
+    sd_plazas   = sd(plazas, na.rm = TRUE),
+    mean_adr  = mean(adr, na.rm = TRUE),
+    sd_adr    = sd(adr, na.rm = TRUE),
+    mean_ipi  = mean(ipi, na.rm = TRUE),
+    sd_ipi    = sd(ipi, na.rm = TRUE)
+  )
+desc_stats
 
-ggplot(df, aes(x = plazas)) +
-  geom_histogram(bins = 30, color = "black", fill = "lightblue") +
-  labs(title = "Histograma de Plazas", x = "Plazas", y = "Frecuencia")
-
-ggplot(df, aes(x = ipi)) +
-  geom_histogram(bins = 30, color = "black", fill = "lightblue") +
-  labs(title = "Histograma de IPI", x = "IPI", y = "Frecuencia")
 ```
 
+Podemos observar como el número medio de pernoctaciones por observación es de aproximadamente 1,3 millones, con una desviación típica en torno a 2,1 millones, lo que refleja una fuerte heterogeneidad entre comunidades y meses. Las plazas de alojamiento muestran también una elevada variabilidad, con una media cercana a 74 mil plazas y una desviación superior a 90 mil. El precio medio por noche (adr) se sitúa en torno a 62 euros, mientras que el ipi tiene un valor medio de 101 puntos, coherente con una base 100 y una desviación alrededor de 13, lo que indica cambios moderados en el ciclo económico.
+
+
+## 4.2. Gráficos descriptivos
+### 4.2.1. Evolución agregada de las pernoctaciones
+
+Ahora, vamos a representar la suma mensual de pernoctaciones a nivel nacional con el fin de identificar tendencias de largo plazo, patrones estacionales y posibles rupturas estructurales en la serie.
 ```{r}
-ggplot(df_plot, aes(x = adr, y = pernoctaciones)) +
-  geom_point(alpha = 0.3) +
-  geom_smooth(method = "loess", se = FALSE) +
-  labs(x = "ADR real", y = "Pernoctaciones")
-
-ggplot(df, aes(x = plazas, y = pernoctaciones)) +
-  geom_point(alpha = 0.3) +
-  geom_smooth(method = "loess", se = FALSE, color = "red") +
-  labs(x = "Plazas", y = "Pernoctaciones")
-
-ggplot(df, aes(x = ipi, y = pernoctaciones)) +
-  geom_point(alpha = 0.3) +
-  geom_smooth(method = "loess", se = FALSE, color = "red") +
-  labs(x = "IPI", y = "Pernoctaciones")
+ggplot(df, aes(x = fecha_panel, y = pernoctaciones)) +
+  stat_summary(fun = sum, geom = "line") +
+  labs(x = "Tiempo", y = "Pernoctaciones totales", 
+       title = "Evolución de las pernoctaciones (total España)")
 ```
 
-```{r anal_exploratorio}
-summary(df_panel[ , c("pernoctaciones", "adr", "plazas", "ipi")])
+Según lo que podemos llegar a observar, la serie agregada muestra un comportamiento claramente estacional, con picos muy pronunciados en los meses de verano y mínimos en temporada baja, sobre una tendencia creciente en el período analizado. Destaca una fuerte caída en 2020, seguida de una recuperación gradual, coherente con el impacto de la pandemia sobre la actividad turística.
 
-cor(
-  df_panel[ , c("pernoctaciones", "adr", "plazas", "ipi")],
-  use = "complete.obs"
-)
+### 4.2.2. Evolución de las pernoctaciones por CCAA
 
-#-----------------------------------------------------------------------------------------------------------
-# análisis multicolinealidad
-vars_x <- df_panel[ , c("adr", "plazas", "ipi")]
-
-cor(vars_x, use = "complete.obs")
-
-library(car)
-mod_pooled <- lm(pernoctaciones ~ adr + plazas + ipi, data = df_panel)
-vif(mod_pooled)
-# no hay multicolinealidad ya que no hay correlaciones significativas (máx. ≈ 0.64) y los VIF están por debajo de 2
-#------------------------------------------------------------------------------------------------------------
+A continuación se representan las pernoctaciones por comunidad autónoma mediante gráficos de líneas facetados. Esto permite comparar la dinámica temporal entre regiones y detectar diferencias estructurales en niveles y patrones de estacionalidad.
+```{r}
+ggplot(df, aes(x = fecha_panel, y = pernoctaciones)) +
+  geom_line() +
+  facet_wrap(~ ccaa) +
+  labs(x = "Tiempo", y = "Pernoctaciones",
+       title = "Pernoctaciones por CCAA en el tiempo")
 ```
+
+Las series regionales confirman una elevada concentración del turismo en Baleares, Canarias, Cataluña, Comunidad Valenciana y Andalucía, que presentan niveles muy superiores al resto y ciclos estacionales bien definidos. Otras regiones, como La Rioja, Navarra, Ceuta o Melilla, muestran volúmenes de pernoctaciones mucho más reducidos y, en algunos casos, mayor volatilidad relativa, lo que apunta a estructuras turísticas menos consolidadas
+
+
+### 4.2.3. Distribución de pernoctaciones por CCAA
+
+Utilizamos ahora diagramas de caja de pernoctaciones por comunidad autónoma para analizar la distribución de la actividad turística dentro de cada región, identificando la mediana, la dispersión y la presencia de observaciones extremas.
+```{r}
+ggplot(df, aes(x = pernoctaciones)) + 
+  geom_histogram(bins = 30) +
+  labs(title = "Distribución de pernoctaciones")
+
+ggplot(df, aes(x = ccaa, y = pernoctaciones)) +
+  geom_boxplot() +
+  coord_flip()
+
+```
+
+Los boxplots muestran distribuciones muy asimétricas: la mayoría de las CCAA concentran gran parte de las observaciones en niveles bajos de pernoctaciones, mientras que pocas regiones presentan valores máximos muy elevados. En particular, Baleares, Canarias y Cataluña exhiben medianas altas y numerosos outliers en la parte superior, coherentes con su papel de principales destinos turísticos, mientras que comunidades del interior presentan cajas muy comprimidas cerca del cero.
+
+## 4.3. Matriz de correlaciones
+
+Por último, se calcula la matriz de correlaciones entre pernoctaciones y las variables explicativas (plazas, adr e ipi). El objetivo es explorar las relaciones lineales bivariantes y valorar la posible existencia de multicolinealidad previa a la estimación del modelo de datos de panel.
+```{r}
+vars_cor <- df |> 
+  select(pernoctaciones, plazas, adr, ipi)
+
+cor_matrix <- cor(vars_cor, use = "pairwise.complete.obs")
+cor_matrix
+
+library(reshape2)
+
+cor_long <- melt(cor_matrix)
+ggplot(cor_long, aes(Var1, Var2, fill = value)) +
+  geom_tile() +
+  scale_fill_gradient2(limits = c(-1,1)) +
+  labs(x = "", y = "", fill = "Correlación")
+```
+
+Las pernoctaciones están fuertemente correlacionadas con las plazas (correlación superior a 0,95), lo que subraya la importancia de la capacidad de alojamiento, pero también sugiere un posible problema de multicolinealidad al incluir ambas variables en la misma especificación. La correlación entre pernoctaciones y adr es positiva y de magnitud media (en torno a 0,66), indicando que los destinos más demandados tienden a asociarse con precios más elevados, posiblemente por mayor calidad o presión de demanda. La relación con el ipi es positiva pero más moderada, en torno a 0,34, lo que apunta a que el ciclo económico influye en el turismo, aunque en menor medida que la capacidad y los precios.
+
+
+
+# 5. Modelo económico de datos de panel
+## 5.1. Formulación de la pregunta de interés
+
+La pregunta en la que nos vamos a centrar es: 
+
+**¿Cómo afectan el precio real (ADR deflactado), la capacidad hotelera (plazas) y la renta disponible (IPI) a la demanda turística (pernoctaciones) en las CCAA españolas?**
+
+Se espera: 
+
+  - Elasticidad-precio negativa: ($\beta_1<0$) 
+  - Efecto oferta positivo: ($\beta_2>0$) 
+  - Mayor demanda con mejor ciclo económico: ($\beta_3>0$)
+
+## 5.2. Modelo teórico
+
+$$Pernoctaciones_{it} = \beta_0 + \beta_1 \cdot ADR_{real,it} + \beta_2 \cdot Plazas_{it} + \beta_3 \cdot IPI_{it} + \sum_{m=2}^{12} \delta_m \cdot DummyMes_m + \alpha_i + \epsilon_{it}$$
+Donde $\alpha_i$ captura heterogeneidad territorial no observada (preferencias, clima, accesibilidad).
+
+
+## 5.3. Especificación econométrica
+### 5.3.1. Variable dependiente y explicativas
+
+- **Pernoctaciones totales**: volumen demanda
+- **ADR real** = ADR nominal / (IPC/100): precio deflactado
+- **Plazas estimadas**: capacidad oferta
+- **IPI general**: proxy renta disponible regional
+- **Dummies mensuales**: control estacionalidad fija
+
+### 5.3.2. Transformaciones (logs, ADR real, etc.)
+
+- Logs en pernoctaciones, plazas, ADR para elasticidades
+- Panel desbalanceado: 17 CCAA × meses
+
+
+# 6. Estimación de modelos de panel
+## 6.1. Modelo pooled OLS
+
+```{r modelo_pooled}
+mod.pool <- plm(pernoctaciones ~ adr + plazas + ipi + factor(mes),
+              data = df, index = c("ccaa", "fecha_panel"), model = "pooling")
+summary(mod.pool)
+```
+
+Los resultados muestran un **excelente ajuste global** (R² = 0.935, F = 3288.58, p<2.2e-16), explicando el 93.5% de la variabilidad de las pernoctaciones.
+
+En cuanto a los coeficientes principales, estos son estadísticamente significativos:
+
+- **ADR** ($\hat{\beta}_{ADR} = 8,948$): Un incremento de 1€ en el precio medio por noche se asocia con **+8,948 pernoctaciones adicionales**, resultado **contraintuitivo** que sugiere que regiones más atractivas tienen mayor ADR y demanda simultáneamente.
+
+- **Plazas** ($\hat{\beta}_{plazas} = 19.97$): Cada plaza hotelera adicional genera **~20 pernoctaciones** adicionales, reflejando el **dominio estructural de la oferta**.
+
+- **IPI** ($\hat{\beta}_{IPI} = 12,350$): Un punto más en el índice industrial se asocia con **+12,350 pernoctaciones**, confirmando el rol procíclico del turismo.
+
+Las **dummies mensuales** capturan la fuerte estacionalidad, destacando **agosto** ($\hat{\delta}_8 = 830,220$) como mes pico.
+
+**Limitación principal**: El modelo *pooled* asume homogeneidad entre CCAA, ignorando heterogeneidad territorial no observada ($\alpha_i$).
+
+## 6.2. Modelo de efectos fijos
+
+```{r modelo_ef}
+mod.ef <- plm(pernoctaciones ~ adr + plazas + ipi + factor(mes),
+          data = df, index = c("ccaa", "fecha_panel"), model = "within")
+
+summary(mod.ef)
+```
+
+El modelo de **efectos fijos** (`within`) elimina la heterogeneidad territorial fija ($\alpha_i$) mediante desmedia temporal por CCAA, permitiendo estimaciones causales más limpias. Conserva un **excelente poder explicativo** (R² = 0.927, F = 2858.04, p<2.2e-16).
+
+En cuanto a los coeficientes, estos muestran **tres cambios notables** respecto al pooled OLS:
+
+- **ADR** ($\hat{\beta}_{ADR} = 4,857$): Reduce un **46%** su magnitud pero **mantiene signo positivo** significativo, sugiriendo que regiones con precios relativamente altos atraen más turistas.
+
+- **Plazas** ($\hat{\beta}_{plazas} = 26.93$): **Aumenta 35%** su efecto, confirmando que la capacidad hotelera es el **driver dominante** de la demanda turística.
+
+- **IPI** ($\hat{\beta}_{IPI} = 2,582$): **Reduce drásticamente** (79%) tras controlar heterogeneidad, pero confirma **carácter procíclico** del turismo.
+
+La **estacionalidad** se mantiene con **agosto** como pico dominante ($\hat{\delta}_8 = 503,350$).
+
+**Limitación persistente**: El **ADR positivo** inesperado sugiere que regiones de calidad superior cobran más Y atraen más turistas.
+
+## 6.3. Modelo de efectos aleatorios
+
+```{r modelo_ea}
+mod.ea <- plm(pernoctaciones ~ adr + plazas + ipi + factor(mes),
+          data = df, index = c("ccaa", "fecha_panel"), model = "random")
+
+summary(mod.ea)
+```
+
+El modelo de **efectos aleatorios** modeliza la heterogeneidad territorial ($\alpha_i$) como componente aleatorio correlacionado con las regresoras, aplicando transformación GLS óptima (θ = 0.916). Conserva **excelente poder explicativo** (R² = 0.926, χ² = 39,532, p<2.2e-16).
+
+En este caso, los coeficientes son **prácticamente idénticos** a efectos fijos:
+
+- **ADR** ($\hat{\beta}_{ADR} = 4,817$): **Disminuye solo 1%** respecto a EF, manteniendo el signo positivo **robusto** a la especificación.
+
+- **Plazas** ($\hat{\beta}_{plazas} = 26.70$): **Dominio absoluto** de la oferta estructural confirmado (también disminuye solo 1% respecto a EF).
+
+- **IPI** ($\hat{\beta}_{IPI} = 2,758$): Efecto procíclico **moderado pero significativo** (aumenta un 7% respecto a EF).
+
+La **estacionalidad** permanece con **agosto** como máximo ($\hat{\delta}_8 = 515,660$).
+
+**Resultado clave**: Coeficientes EF/EA **indistinguibles**, sugiriendo que la heterogeneidad territorial se trata eficientemente en ambas especificaciones. El **test de Hausman** será decisivo.
+
+## 6.4. Comparación de modelos
+### 6.4.1. Test F (EF vs pooled)
+
+```{r test_F}
+pFtest(mod.ef, mod.pool)
+```
+
+El test F de efectos individuales contrasta el modelo pooled frente al modelo con efectos fijos por comunidad autónoma. El estadístico F = 281.07 (p‑valor < 0.001) permite rechazar claramente la hipótesis nula de ausencia de efectos individuales. Por tanto, la heterogeneidad no observada entre CCAA es estadísticamente relevante y el modelo pooled resulta inadecuado. En consecuencia, el modelo de **efectos fijos** es preferible al modelo agrupado para explicar las pernoctaciones turísticas.
+
+### 6.4.2. Test de Hausman (EF vs EA)
+
+```{r test_Hausman}
+phtest(mod.ef, mod.ea)
+```
+
+El test de Hausman compara las estimaciones de efectos fijos y efectos aleatorios. El valor del estadístico chi‑cuadrado es 277.73 con 14 grados de libertad y un p‑valor < 0.001, por lo que se rechaza la hipótesis nula de que ambos estimadores sean consistentes. Esto indica que los efectos individuales están correlacionados con las variables explicativas, violando el supuesto clave del modelo de efectos aleatorios. En consecuencia, el modelo de **efectos fijos** se considera el más adecuado para el análisis.
+
+## 6.5. Diagnóstico
+### 6.5.1. Heterocedasticidad y autocorrelación
+
+```{r heterocedasticidad_y_autocorrelacion}
+# test heterocedasticidad (tipo Breusch–Pagan sobre EF)
+bptest(mod.ef)
+
+# test autocorrelación en panel (Wooldridge)
+pwfdtest(pernoctaciones ~ adr + plazas + ipi + factor(mes),
+         data = df, index = c("ccaa","fecha_panel"))
+```
+
+Dado que trabajamos con un panel mensual por CCAA, es razonable sospechar la presencia de heterocedasticidad y autocorrelación en los residuos. Por ello, se aplicaron contrastes específicos sobre el modelo de efectos fijos. Los resultados de los tests de heterocedasticidad y de autocorrelación en panel indican que los supuestos clásicos de varianza constante e independencia temporal no se cumplen estrictamente, por lo que la inferencia basada en errores estándar convencionales podría ser poco fiable.
+
+### 6.5.2. Corrección con errores robustos
+
+```{r corrección_errores_robustos}
+# errores robustos tipo Arellano (cluster por CCAA)
+vcov_rob <- vcovHC(mod.ef, method = "arellano", type = "HC0", cluster = "group")
+res_rob  <- coeftest(mod.ef, vcov = vcov_rob)
+res_rob
+```
+
+Para solventar estos problemas, se reestimaron los errores estándar del modelo de efectos fijos utilizando varianzas robustas agrupadas por comunidad autónoma. Esta corrección no altera los coeficientes puntuales, pero ajusta sus errores estándar y, por tanto, los estadísticos t. Tras aplicar la corrección robusta, los signos y la significatividad de las variables clave (ADR real, plazas e IPI) se mantienen, por lo que el modelo de efectos fijos con errores estándar robustos se considera una especificación adecuada para responder a la pregunta de interés.
+
+
+# 7. Interpretación de resultados de panel
+## 7.1. Efectos de plazas, ADR real e IPI
+
+Tomando como modelo de referencia la estimación de efectos fijos con errores estándar robustos agrupados por comunidad autónoma, se observa que la variable más determinante es el número de plazas hoteleras. El coeficiente asociado a *plazas* (≈ 26,9) es positivo y altamente significativo, lo que indica que un aumento de la capacidad de alojamiento se traduce en un incremento proporcional muy elevado de las pernoctaciones, coherente con el papel estructural de la oferta en la demanda turística.
+
+En cambio, el coeficiente del *ADR* real (≈ 4.856) mantiene signo positivo pero deja de ser estadísticamente significativo al considerar errores robustos. Esto sugiere que, una vez controlada la heterogeneidad fija por CCAA y la capacidad de oferta, el efecto precio sobre la demanda es débil y no puede distinguirse claramente de cero, posiblemente por la presencia de factores de calidad o de endogeneidad en la fijación de precios.
+
+Por su parte, el *IPI* presenta un coeficiente positivo moderado (≈ 2.582) que tampoco resulta significativo con la corrección robusta, lo que apunta a que el ciclo económico regional tiene un impacto limitado sobre las pernoctaciones dentro de una misma comunidad a lo largo del tiempo, una vez controlados los efectos fijos y la estacionalidad mediante dummies mensuales.
+
+## 7.2. Discusión económica de los coeficientes
+
+Los resultados del modelo de efectos fijos con errores estándar robustos muestran que la demanda turística regional está dominada por factores estructurales de oferta. El coeficiente de *plazas* es grande y muy significativo, lo que respalda la idea de que las comunidades con mayor capacidad alojativa son capaces de sostener niveles mucho más altos de pernoctaciones, incluso tras controlar por efectos fijos y estacionalidad.
+
+En cambio, el papel del precio real del alojamiento resulta más ambiguo: aunque el ADR real conserva signo positivo, pierde significación estadística con la corrección robusta, por lo que no se puede concluir que un encarecimiento real del alojamiento genere, por sí mismo, más pernoctaciones. Este resultado es coherente con la posible presencia de atributos de calidad no observados o estrategias de fijación de precios que hacen que los destinos más atractivos cobren más sin destruir la demanda.
+
+Finalmente, el IPI actúa como un indicador macroeconómico de fondo cuyo efecto sobre las pernoctaciones intra‑CCAA es relativamente reducido una vez controlados los efectos fijos territoriales y los patrones estacionales. En conjunto, el modelo sugiere que las diferencias persistentes entre comunidades y la capacidad instalada pesan más que las fluctuaciones coyunturales de precios y actividad económica a la hora de explicar la demanda turística regional.
+
+
+# 8. Análisis de series temporales
+## 8.1. Selección de la serie (por ejemplo, pernoctaciones totales)
+## 8.2. Exploración y descomposición
+### 8.2.1. Tendencia, ciclo y estacionalidad
+## 8.3. Transformaciones y estacionariedad
+## 8.4. Modelización con `forecast`
+### 8.4.1. Modelos ARIMA/ETS
+### 8.4.2. Selección de modelo
+
+# 9. Evaluación de pronósticos
+## 9.1. Diseño de la ventana deslizante
+## 9.2. Métricas de error (MAE, RMSE, etc.)
+## 9.3. Comparación de modelos de pronóstico
+
+# 10. Pronóstico final e interpretación
+## 10.1. Gráficos de pronóstico con bandas de confianza
+## 10.2. Lectura económica de los resultados
+
+# 11. Conclusiones
+## 11.1. Resumen de hallazgos del panel
+## 11.2. Resumen de resultados de series temporales
+## 11.3. Limitaciones y posibles extensiones
+
 
 ```{r}
 #modelo efectos fijos
